@@ -1,0 +1,7 @@
+{
+  "demo": {
+    "transport": "stdio",
+    "command": "python",
+    "args": ["-m", "agent_assistant.mcp_servers.demo_server"]
+  }
+}

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-assistant"
+version = "0.1.0"
+description = "LangChain ReAct Agent 命令行助手"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "langchain>=1.0,<2",
+    "langgraph>=1.0,<2",
+    "langchain-openai>=1.0,<2",
+    "langchain-mcp-adapters>=0.2,<1",
+    "mcp>=1.0,<2",
+    "pydantic-settings>=2.0,<3",
+    "python-dotenv>=1.0,<2",
+    "rich>=13,<15",
+    "PyYAML>=6,<7",
+]
+
+[project.scripts]
+agent-assistant = "agent_assistant.cli:main"
+agent-react-demo = "agent_assistant.manual_react_demo:manual_demo_main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "pytest-asyncio>=0.24,<2",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
