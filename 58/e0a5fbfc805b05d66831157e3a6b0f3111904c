@@ -1,0 +1,23 @@
+src/agent_assistant/tools/common.py
+  s_01dd9a4a7e0388::t_726940d59458f3 81-91
+src/agent_assistant/tools/__init__.py
+  s_01dd9a4a7e0388::t_bdaa1cc17ba2ec 11,26-30,42,52-54,73-79,96
+tests/tools/test_common.py
+  s_01dd9a4a7e0388::t_34d826ea37058b 76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.44-trip",
+  "base_commit_sha": "58e0a5fbfc805b05d66831157e3a6b0f3111904c",
+  "prompts": {},
+  "sessions": {
+    "s_01dd9a4a7e0388": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "232b707a-6977-4451-bca7-5868ae133700",
+        "model": "default"
+      },
+      "human_author": "z.zhen <z.zhen@trip.com>"
+    }
+  }
+}
