@@ -8,7 +8,7 @@ from pathlib import Path
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, ConfigDict, Field
 
-from agent_assistant.tools.common import current_time, safe_calculate
+from agent_assistant.tools.common import current_time, get_weather, safe_calculate
 from agent_assistant.tools.filesystem import ProjectFileTools
 from agent_assistant.tools.shell import ShellRunner
 
@@ -23,6 +23,11 @@ class _TimeInput(BaseModel):
     timezone_name: str = Field("Asia/Shanghai", description="IANA 时区名称")
 
 
+class _WeatherInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    city: str = Field(..., description="要查询天气的城市名称")
+
+
 class _ShellInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     command: str = Field(..., description="要在项目根目录执行的 Shell 命令")
@@ -34,7 +39,7 @@ def build_builtin_tools(
     max_chars: int,
     approve: Callable[[str, str], bool],
 ) -> list[BaseTool]:
-    """组装项目文件、计算、时间与 Shell LangChain 工具。"""
+    """组装项目文件、计算、时间、天气与 Shell LangChain 工具。"""
     file_tools = ProjectFileTools(root, max_chars=max_chars)
     shell_runner = ShellRunner(root, shell_timeout, max_chars, approve)
 
@@ -43,6 +48,9 @@ def build_builtin_tools(
 
     async def acurrent_time(timezone_name: str = "Asia/Shanghai") -> str:
         return current_time(timezone_name)
+
+    async def aget_weather(city: str) -> str:
+        return get_weather(city)
 
     async def arun_shell(command: str) -> str:
         return shell_runner.run(command)
@@ -63,6 +71,13 @@ def build_builtin_tools(
             args_schema=_TimeInput,
         ),
         StructuredTool.from_function(
+            func=get_weather,
+            coroutine=aget_weather,
+            name="get_weather",
+            description="查询指定城市的天气（模拟返回，非真实数据）",
+            args_schema=_WeatherInput,
+        ),
+        StructuredTool.from_function(
             func=shell_runner.run,
             coroutine=arun_shell,
             name="run_shell",
@@ -78,5 +93,6 @@ __all__ = [
     "ShellRunner",
     "build_builtin_tools",
     "current_time",
+    "get_weather",
     "safe_calculate",
 ]

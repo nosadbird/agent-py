@@ -78,3 +78,14 @@ def current_time(timezone_name: str = "Asia/Shanghai") -> str:
         return datetime.now(ZoneInfo(timezone_name)).isoformat()
     except (ZoneInfoNotFoundError, ValueError, TypeError):
         return f"时区错误：无效时区 {timezone_name}"
+
+
+def get_weather(city: str) -> str:
+    """模拟查询指定城市天气，返回固定文本（不访问真实天气服务）。"""
+    cleaned = city.strip()
+    if not cleaned:
+        return "天气查询错误：城市名称不能为空"
+    return (
+        f"{cleaned}：晴，气温 22°C，东南风 2 级，湿度 55%。"
+        "（模拟数据，非真实天气）"
+    )

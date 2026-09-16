@@ -73,5 +73,6 @@ def test_build_builtin_tools_returns_all_tools(tmp_path: Path) -> None:
         "search_text",
         "calculate",
         "current_time",
+        "get_weather",
         "run_shell",
     }

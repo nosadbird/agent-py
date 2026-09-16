@@ -59,6 +59,9 @@ async def manual_react(
     for _ in range(max_steps):
         try:
             response = await bound_model.ainvoke(messages)
+            print("--------response start-----------")
+            print(response)
+            print("--------response end-----------")
         except Exception:
             return "模型调用失败，请稍后重试或检查配置。"
         if not isinstance(response, AIMessage):
@@ -119,21 +122,23 @@ def manual_demo_main() -> None:
         print("手写 Demo 初始化失败，请检查模型配置和运行依赖。")
         return
     try:
-        user_input = input("你：")
-        answer = asyncio.run(
-            manual_react(
-                model,
-                tools,
-                user_input,
+        ### 改为多次循环
+        while True :
+            user_input = input("你：")
+            answer = asyncio.run(
+                manual_react(
+                    model,
+                    tools,
+                    user_input,
+                )
             )
-        )
+            print(answer)
     except (KeyboardInterrupt, EOFError):
         print("已取消并退出。")
         return
     except ValueError as exc:
         print(f"输入无效：{exc}")
         return
-    print(answer)
 
 
 if __name__ == "__main__":

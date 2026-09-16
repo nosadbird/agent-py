@@ -88,7 +88,7 @@ def _system_prompt(skills: SkillRegistry, memory_context: str) -> str:
         "你是一个使用中文协助用户完成项目任务的本地 Agent 助手。\n"
         "安全边界：文件和 Shell 操作必须遵守工具自身限制；危险操作必须等待用户审批，"
         "不得猜测审批结果，不得泄露密钥、完整环境变量或其他敏感信息。\n"
-        "只展示结论、必要步骤和工具结果，不得输出私有思维链。\n\n"
+        "把思考过程也输出。\n\n"
         f"Skills catalog（需要时使用 load_skill 按需读取）：\n{skills.catalog_text()}\n\n"
         f"当前记忆上下文：\n{memory_context}"
     )
