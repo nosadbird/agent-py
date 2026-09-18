@@ -12,12 +12,22 @@ from langchain_core.tools import BaseTool
 
 from agent_assistant.config import load_settings
 from agent_assistant.model import create_chat_model
+from agent_assistant.skills import SkillRegistry
 from agent_assistant.tools import build_builtin_tools
 
-_SYSTEM_PROMPT = (
+_SYSTEM_PROMPT_BASE = (
     "你是一个中文本地助手。需要时调用提供的工具，根据工具返回结果继续作答。"
+    "若任务与 Skills catalog 中的技能相关，先用 load_skill 读取完整说明，再按其步骤执行。"
 )
 _EMPTY_RESPONSE = "模型没有返回有效内容，请换一种方式重试。"
+_EXIT_COMMANDS = frozenset({"/exit", "exit", "quit"})
+
+
+def _build_system_prompt(skills: SkillRegistry) -> str:
+    return (
+        f"{_SYSTEM_PROMPT_BASE}\n\n"
+        f"Skills catalog（需要时使用 load_skill 按需读取）：\n{skills.catalog_text()}"
+    )
 
 
 def _content_text(content: object) -> str:
@@ -41,6 +51,7 @@ async def manual_react(
     tools: list[BaseTool],
     user_input: str,
     max_steps: int = 10,
+    system_prompt: str | None = None,
 ) -> str:
     """运行显式工具调用循环，不输出模型私有推理过程。"""
     cleaned = user_input.strip()
@@ -52,7 +63,7 @@ async def manual_react(
     tool_by_name = {tool.name: tool for tool in tools}
     bound_model = model.bind_tools(tools)
     messages = [
-        SystemMessage(content=_SYSTEM_PROMPT),
+        SystemMessage(content=system_prompt or _SYSTEM_PROMPT_BASE),
         HumanMessage(content=cleaned),
     ]
 
@@ -97,7 +108,7 @@ async def manual_react(
 
 
 def manual_demo_main() -> None:
-    """加载本地配置与安全工具，读取一次输入并运行手写循环。"""
+    """加载本地配置、Skills 与安全工具，循环读取输入并运行手写循环。"""
     root = Path.cwd()
     try:
         settings = load_settings(root)
@@ -112,24 +123,37 @@ def manual_demo_main() -> None:
 
     try:
         model = create_chat_model(settings)
-        tools = build_builtin_tools(
-            root=root,
-            shell_timeout=settings.shell_timeout_seconds,
-            max_chars=settings.shell_max_output_chars,
-            approve=make_shell_approval(),
-        )
+        skills = SkillRegistry(root)
+        tools = [
+            *build_builtin_tools(
+                root=root,
+                shell_timeout=settings.shell_timeout_seconds,
+                max_chars=settings.shell_max_output_chars,
+                approve=make_shell_approval(),
+            ),
+            *skills.as_tools(),
+        ]
+        system_prompt = _build_system_prompt(skills)
     except Exception:
         print("手写 Demo 初始化失败，请检查模型配置和运行依赖。")
         return
+
+    for warning in skills.warnings:
+        print(f"Skill 警告：{warning}")
+    print(f"已加载 {len(skills.list_skills())} 个 Skills。输入 /exit 退出。")
+
     try:
-        ### 改为多次循环
-        while True :
+        while True:
             user_input = input("你：")
+            if user_input.strip().lower() in _EXIT_COMMANDS:
+                print("已退出。")
+                return
             answer = asyncio.run(
                 manual_react(
                     model,
                     tools,
                     user_input,
+                    system_prompt=system_prompt,
                 )
             )
             print(answer)

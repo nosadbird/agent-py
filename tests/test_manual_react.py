@@ -212,15 +212,24 @@ def test_demo_main_uses_manual_react_default_step_limit(
         tools: object,
         user_input: str,
         max_steps: int = 8,
+        system_prompt: str | None = None,
     ) -> str:
         captured["max_steps"] = max_steps
+        captured["system_prompt"] = system_prompt
+        captured["tool_names"] = (
+            [getattr(tool, "name", None) for tool in tools]
+            if isinstance(tools, list)
+            else tools
+        )
         return "回答"
+
+    inputs = iter(["问题", "/exit"])
 
     monkeypatch.setattr(manual_react_demo, "load_settings", lambda root: DemoSettings())
     monkeypatch.setattr(manual_react_demo, "create_chat_model", lambda settings: object())
     monkeypatch.setattr(manual_react_demo, "build_builtin_tools", lambda **kwargs: [])
     monkeypatch.setattr(manual_react_demo, "manual_react", fake_manual_react)
-    monkeypatch.setattr("builtins.input", lambda prompt: "问题")
+    monkeypatch.setattr("builtins.input", lambda prompt: next(inputs))
 
     manual_react_demo.manual_demo_main()
 
