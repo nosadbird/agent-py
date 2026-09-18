@@ -1,0 +1,22 @@
+tests/test_manual_react.py
+  s_01dd9a4a7e0388::t_30183c4be48e8b 215,218-223
+  s_01dd9a4a7e0388::t_572c8686deb730 226-227,232
+src/agent_assistant/manual_react_demo.py
+  s_01dd9a4a7e0388::t_ca7e03a587ee3c 15,18,20,23-30,54,66,111,126-136,140-144,146,148-150,156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.44-trip",
+  "base_commit_sha": "13938bfdad5eceb6238fcd54d115c8b49b0c2c35",
+  "prompts": {},
+  "sessions": {
+    "s_01dd9a4a7e0388": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "232b707a-6977-4451-bca7-5868ae133700",
+        "model": "default"
+      },
+      "human_author": "z.zhen <z.zhen@trip.com>"
+    }
+  }
+}
