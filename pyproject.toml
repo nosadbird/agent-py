@@ -17,11 +17,14 @@ dependencies = [
     "python-dotenv>=1.0,<2",
     "rich>=13,<15",
     "PyYAML>=6,<7",
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
 ]
 
 [project.scripts]
 agent-assistant = "agent_assistant.cli:main"
 agent-react-demo = "agent_assistant.manual_react_demo:manual_demo_main"
+agent-demo-api = "agent_assistant.api:main"
 
 [project.optional-dependencies]
 dev = [
