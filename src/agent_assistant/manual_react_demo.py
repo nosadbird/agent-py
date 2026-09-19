@@ -14,6 +14,7 @@ from agent_assistant.config import load_settings
 from agent_assistant.model import create_chat_model
 from agent_assistant.skills import SkillRegistry
 from agent_assistant.tools import build_builtin_tools
+from agent_assistant.cli import make_shell_approval
 
 _SYSTEM_PROMPT_BASE = (
     "你是一个中文本地助手。需要时调用提供的工具，根据工具返回结果继续作答。"
@@ -118,8 +119,6 @@ def manual_demo_main() -> None:
             "并填写有效的 DASHSCOPE_API_KEY。"
         )
         return
-
-    from agent_assistant.cli import make_shell_approval
 
     try:
         model = create_chat_model(settings)
