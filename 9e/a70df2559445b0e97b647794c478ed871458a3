@@ -1,0 +1,23 @@
+src/agent_assistant/api.py
+  s_02560769935d87::t_21f8302d429a7b 1-77
+pyproject.toml
+  s_02560769935d87::t_12dbcd44d72d6d 20-21,27
+src/agent_assistant/agent_executor.py
+  s_02560769935d87::t_be49a9e8132270 7,10,14,18-20,35-36,46-67,79,89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.44-trip",
+  "base_commit_sha": "9ea70df2559445b0e97b647794c478ed871458a3",
+  "prompts": {},
+  "sessions": {
+    "s_02560769935d87": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4946ab62-9b03-443b-acb4-cc5e7971179a",
+        "model": "default"
+      },
+      "human_author": "z.zhen <z.zhen@trip.com>"
+    }
+  }
+}
