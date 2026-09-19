@@ -1,0 +1,19 @@
+src/agent_assistant/agent_executor.py
+  s_02560769935d87::t_f95e513042ece6 1-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.44-trip",
+  "base_commit_sha": "fd2ab89a42d098b3d375d9c76f36f9ed24889b4c",
+  "prompts": {},
+  "sessions": {
+    "s_02560769935d87": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4946ab62-9b03-443b-acb4-cc5e7971179a",
+        "model": "default"
+      },
+      "human_author": "z.zhen <z.zhen@trip.com>"
+    }
+  }
+}
