@@ -10,6 +10,16 @@ from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.tools import tool
+from langchain.agents.middleware import wrap_tool_call
+from langchain_core.messages import ToolMessage
+from langchain.messages import RemoveMessage
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
+from langgraph.checkpoint.memory import InMemorySaver
+from langchain.agents import create_agent, AgentState
+from langchain.agents.middleware import before_model
+from langgraph.runtime import Runtime
+from langchain_core.runnables import RunnableConfig
+from typing import Any
 
 from agent_assistant.config import Settings, load_settings
 from agent_assistant.model import create_chat_model
@@ -20,10 +30,44 @@ _SYSTEM_PROMPT = (
 )
 
 
+@before_model
+def trim_messages(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
+    """Keep only the last few messages to fit context window."""
+    messages = state["messages"]
+    if len(messages) <= 3:
+        return None  # No changes needed
+
+    first_msg = messages[0]
+    recent_messages = messages[-3:] if len(messages) % 2 == 0 else messages[-4:]
+    new_messages = [first_msg] + recent_messages
+
+    final_message = {
+        "messages": [
+            RemoveMessage(id=REMOVE_ALL_MESSAGES),
+            *new_messages
+        ]
+    }
+    return final_message
+
+
+@wrap_tool_call
+def handle_tool_errors(request, handler):
+    """使用自定义消息处理工具执行错误。"""
+    try:
+        return handler(request)
+    except Exception as e:
+        # 向模型返回自定义错误消息
+        return ToolMessage(
+            content=f"工具错误：请检查您的输入并重试。({str(e)})",
+            tool_call_id=request.tool_call["id"]
+        )
+
+
 @tool
 def add_numbers(a: float, b: float) -> float:
     """计算两个数的和，返回 a + b。"""
-    return a + b
+    raise Exception("错误描述信息")
+    # return a + b
 
 
 @tool
@@ -42,6 +86,8 @@ def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | No
         model=model,
         tools=[add_numbers, get_current_datetime],
         system_prompt=_SYSTEM_PROMPT,
+        middleware=[handle_tool_errors,trim_messages],
+        checkpointer=InMemorySaver() ### 内存存储
     )
 
 
@@ -50,7 +96,8 @@ def ask_agent(agent: Any, message: str) -> str:
     cleaned = message.strip()
     if not cleaned:
         raise ValueError("用户输入不能为空")
-    state = agent.invoke({"messages": [HumanMessage(content=cleaned)]})
+    state = agent.invoke({"messages": [HumanMessage(content=cleaned)]},
+                         {"configurable": {"thread_id": "1"}})
     return final_text(state)
 
 def final_text(state: dict[str, Any]) -> str:
