@@ -8,7 +8,7 @@ from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langchain.agents.middleware import wrap_tool_call
 from langchain_core.messages import ToolMessage
@@ -29,6 +29,64 @@ _SYSTEM_PROMPT = (
     "你是一个乐于助人且专业的助手，根据需要选择是否使用工具，尽可能给出准确的回答。"
 )
 
+@before_model
+def summary_messages(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
+    """将较早的对话历史总结为摘要，仅保留最近几条消息，避免超出上下文窗口。"""
+    messages = state["messages"]
+
+    # 阈值可以适当调大，避免消息太少时就触发（没有必要总结）
+    if len(messages) <= 3:
+        return None
+
+    # 保留最近几条消息（奇偶判断保证不截断到"半轮对话"）
+    keep_count = 4 if len(messages) % 2 == 0 else 5
+    recent_messages = messages[-keep_count:]
+    messages_to_summarize = messages[:-keep_count]
+
+    if not messages_to_summarize:
+        return None
+
+    # 取出已有摘要（上一次裁剪时生成的），实现摘要的"滚动更新"
+    existing_summary = state.get("summary", "")
+
+    # 把需要总结的这部分消息拼接成文本
+    conversation_text = "\n".join(
+        f"{msg.type}: {msg.content}" for msg in messages_to_summarize
+    )
+
+    summary_prompt = (
+        "你是一个对话摘要助手。请将下面的新对话内容整合进已有摘要中，"
+        "输出一个简洁但完整的摘要，务必保留关键信息（如用户姓名、偏好、"
+        "已经讨论过的事项、已经给出的结论等），不要遗漏重要细节。\n\n"
+        f"已有摘要：\n{existing_summary or '（无）'}\n\n"
+        f"新对话内容：\n{conversation_text}\n\n"
+        "请输出更新后的摘要："
+    )
+    root = Path.cwd()
+    try:
+        settings = load_settings(root)
+    except Exception:
+        print(
+            "配置加载失败：请参考 .env.example 创建 .env，"
+            "并填写有效的 DASHSCOPE_API_KEY。"
+        )
+        return
+    summary_model = create_chat_model(settings)
+    summary_response = summary_model.invoke(summary_prompt)
+    new_summary = summary_response.content
+
+    summary_message = SystemMessage(
+        content=f"[以下是此前对话的摘要，供参考]\n{new_summary}"
+    )
+    
+    return {
+        "messages": [
+            RemoveMessage(id=REMOVE_ALL_MESSAGES),
+            summary_message,
+            *recent_messages,
+        ],
+        "summary": new_summary,  # 更新持久化的摘要字段
+    }
 
 @before_model
 def trim_messages(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
@@ -86,7 +144,7 @@ def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | No
         model=model,
         tools=[add_numbers, get_current_datetime],
         system_prompt=_SYSTEM_PROMPT,
-        middleware=[handle_tool_errors,trim_messages],
+        middleware=[handle_tool_errors,summary_messages],
         checkpointer=InMemorySaver() ### 内存存储
     )
 
