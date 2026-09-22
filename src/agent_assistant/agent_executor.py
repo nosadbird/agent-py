@@ -16,7 +16,7 @@ from agent_assistant.model import create_chat_model
 
 _EXIT_COMMANDS = frozenset({"/exit", "exit", "quit"})
 _SYSTEM_PROMPT = (
-    "你是一个中文助手，根据需要选择是否使用工具，根据工具结果用中文简洁回答。"
+    "你是一个乐于助人且专业的助手，根据需要选择是否使用工具，尽可能给出准确的回答。"
 )
 
 
@@ -30,17 +30,6 @@ def add_numbers(a: float, b: float) -> float:
 def get_current_datetime() -> str:
     """获取当前本地日期和时间，格式为 YYYY-MM-DD HH:MM:SS。"""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-def final_text(state: dict[str, Any]) -> str:
-    """从 Agent 返回状态中提取最终文本回答。"""
-    messages = state.get("messages") or []
-    for message in reversed(messages):
-        if isinstance(message, AIMessage) and not message.tool_calls:
-            content = message.content
-            if isinstance(content, str) and content.strip():
-                return content.strip()
-    return "模型没有返回有效内容。"
 
 
 def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | None = None):
@@ -63,6 +52,16 @@ def ask_agent(agent: Any, message: str) -> str:
         raise ValueError("用户输入不能为空")
     state = agent.invoke({"messages": [HumanMessage(content=cleaned)]})
     return final_text(state)
+
+def final_text(state: dict[str, Any]) -> str:
+    """从 Agent 返回状态中提取最终文本回答。"""
+    messages = state.get("messages") or []
+    for message in reversed(messages):
+        if isinstance(message, AIMessage) and not message.tool_calls:
+            content = message.content
+            if isinstance(content, str) and content.strip():
+                return content.strip()
+    return "模型没有返回有效内容。"
 
 
 def main() -> None:
