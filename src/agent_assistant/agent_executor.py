@@ -28,6 +28,7 @@ _EXIT_COMMANDS = frozenset({"/exit", "exit", "quit"})
 _SYSTEM_PROMPT = (
     "你是一个乐于助人且专业的助手，根据需要选择是否使用工具，尽可能给出准确的回答。"
 )
+choice = "not_stream"
 
 @before_model
 def summary_messages(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
@@ -133,6 +134,20 @@ def get_current_datetime() -> str:
     """获取当前本地日期和时间，格式为 YYYY-MM-DD HH:MM:SS。"""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+settings = load_settings(Path.cwd())
+subModel = create_chat_model(settings)
+subagent1 = create_agent(model=subModel)
+
+@tool(
+    "行程规划助手",
+    description="你是一个行程规划的助手，帮用户合理的规划形成"
+)
+def call_subagent1(query: str):
+    result = subagent1.invoke({
+        "messages": [{"role": "user", "content": query}]
+    })
+    print("subAgent:"+result["messages"][-1].content)
+    return result["messages"][-1].content
 
 def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | None = None):
     """创建带求和/时间两个工具的 create_agent 实例。"""
@@ -142,7 +157,7 @@ def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | No
         model = create_chat_model(settings)
     return create_agent(
         model=model,
-        tools=[add_numbers, get_current_datetime],
+        tools=[add_numbers, get_current_datetime, call_subagent1],
         system_prompt=_SYSTEM_PROMPT,
         middleware=[handle_tool_errors,summary_messages],
         checkpointer=InMemorySaver() ### 内存存储
@@ -168,6 +183,13 @@ def final_text(state: dict[str, Any]) -> str:
                 return content.strip()
     return "模型没有返回有效内容。"
 
+def ask_agent_stream(agent,message: str) -> str:
+    for chunk in agent.stream({"messages": [HumanMessage(content=message)]}, 
+                              {"configurable": {"thread_id": "1"}},
+                              stream_mode="updates"):
+        for step, data in chunk.items():
+            print(f"step: {step}")
+            print(f"content: {data['messages'][-1].content_blocks}")
 
 def main() -> None:
     root = Path.cwd()
@@ -190,7 +212,11 @@ def main() -> None:
             if user_input.lower() in _EXIT_COMMANDS:
                 print("已退出。")
                 return
-            print(ask_agent(agent, user_input))
+            
+            if choice == "stream":
+                ask_agent_stream(agent, user_input)
+            else:
+                print(ask_agent(agent, user_input))
     except (KeyboardInterrupt, EOFError):
         print("已取消并退出。")
 
