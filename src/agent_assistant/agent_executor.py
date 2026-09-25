@@ -18,17 +18,26 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langchain.agents import create_agent, AgentState
 from langchain.agents.middleware import before_model
 from langgraph.runtime import Runtime
-from langchain_core.runnables import RunnableConfig
 from typing import Any
 
 from agent_assistant.config import Settings, load_settings
 from agent_assistant.model import create_chat_model
+from agent_assistant.skills import SkillRegistry
+
+choice = "not_stream"
 
 _EXIT_COMMANDS = frozenset({"/exit", "exit", "quit"})
-_SYSTEM_PROMPT = (
-    "你是一个乐于助人且专业的助手，根据需要选择是否使用工具，尽可能给出准确的回答。"
+
+_SYSTEM_PROMPT_BASE = (
+    "你是一个中文本地助手。需要时调用提供的工具，根据工具返回结果继续作答。"
+    "若任务与 Skills catalog 中的技能相关，先用 load_skill 读取完整说明，再按其步骤执行。"
 )
-choice = "not_stream"
+
+def _build_system_prompt(skills: SkillRegistry) -> str:
+    return (
+        f"{_SYSTEM_PROMPT_BASE}\n\n"
+        f"Skills catalog（需要时使用 load_skill 按需读取）：\n{skills.catalog_text()}"
+    )
 
 @before_model
 def summary_messages(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
@@ -134,6 +143,8 @@ def get_current_datetime() -> str:
     """获取当前本地日期和时间，格式为 YYYY-MM-DD HH:MM:SS。"""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+
+#################### subAgent
 settings = load_settings(Path.cwd())
 subModel = create_chat_model(settings)
 subagent1 = create_agent(model=subModel)
@@ -148,6 +159,8 @@ def call_subagent1(query: str):
     })
     print("subAgent:"+result["messages"][-1].content)
     return result["messages"][-1].content
+#################### subAgent
+
 
 def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | None = None):
     """创建带求和/时间两个工具的 create_agent 实例。"""
@@ -155,10 +168,12 @@ def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | No
         if settings is None:
             settings = load_settings(Path.cwd())
         model = create_chat_model(settings)
+    root = Path.cwd()
+    skills = SkillRegistry(root)
     return create_agent(
         model=model,
-        tools=[add_numbers, get_current_datetime, call_subagent1],
-        system_prompt=_SYSTEM_PROMPT,
+        tools=[add_numbers, get_current_datetime, call_subagent1, *skills.as_tools()],
+        system_prompt=_build_system_prompt(skills),
         middleware=[handle_tool_errors,summary_messages],
         checkpointer=InMemorySaver() ### 内存存储
     )

@@ -81,6 +81,9 @@ class SkillRegistry:
         return sorted(self._index.values(), key=lambda item: item.name)
 
     def load_skill(self, name: str) -> str:
+        print("---------------load_skill------------------")
+        print("skill name:"+name)
+        print("---------------load_skill------------------")
         if not _is_valid_name(name):
             return f"非法技能名称：{name}"
         skill = self._index.get(name)
@@ -89,6 +92,7 @@ class SkillRegistry:
         return self._read_skill_file(skill)
 
     def catalog_text(self) -> str:
+        print("---------------catalog_text------------------")
         skills = self.list_skills()
         if not skills:
             return "（无可用技能）"
