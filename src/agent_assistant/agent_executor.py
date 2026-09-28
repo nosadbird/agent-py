@@ -206,6 +206,7 @@ def ask_agent_stream(agent,message: str) -> str:
             print(f"step: {step}")
             print(f"content: {data['messages'][-1].content_blocks}")
 
+
 def main() -> None:
     root = Path.cwd()
     try:
