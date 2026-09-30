@@ -15,6 +15,7 @@ from langchain_core.messages import ToolMessage
 from langchain.messages import RemoveMessage
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain.agents.middleware import HumanInTheLoopMiddleware
 from langchain.agents import create_agent, AgentState
 from langchain.agents.middleware import before_model
 from langgraph.runtime import Runtime
@@ -121,6 +122,14 @@ def trim_messages(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
 @wrap_tool_call
 def handle_tool_errors(request, handler):
     """使用自定义消息处理工具执行错误。"""
+    print(request)
+    user_input = input("是否允许调用该工具: y/n? ：").strip()
+    if user_input != 'y' :
+        return ToolMessage(
+            content="用户拒绝调用该工具，请尝试其它工具。",
+            tool_call_id=request.tool_call["id"]
+        )
+    
     try:
         return handler(request)
     except Exception as e:
@@ -174,7 +183,7 @@ def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | No
         model=model,
         tools=[add_numbers, get_current_datetime, call_subagent1, *skills.as_tools()],
         system_prompt=_build_system_prompt(skills),
-        middleware=[handle_tool_errors,summary_messages],
+        middleware=[handle_tool_errors,summary_messages,],
         checkpointer=InMemorySaver() ### 内存存储
     )
 
