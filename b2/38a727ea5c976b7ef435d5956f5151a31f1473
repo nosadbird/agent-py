@@ -1,0 +1,44 @@
+tests/tools/test_agent_executor_files.py
+  s_161b8ce0b5e448::t_f5a62d434ada8a 1-43
+tests/tools/test_agent_executor_shell.py
+  s_161b8ce0b5e448::t_00e66ddd54d018 1-93
+tests/test_agent_executor_runtime.py
+  s_161b8ce0b5e448::t_0178d9b0ba9f06 1-48
+src/agent_assistant/checkpointer.py
+  s_161b8ce0b5e448::t_f9542a26152ce4 1-10
+src/agent_assistant/middleware.py
+  s_161b8ce0b5e448::t_6c375fdbce83a0 82-88,90-91,93-96,99-117
+  s_161b8ce0b5e448::t_7c5fb6da507c34 17-19
+  s_161b8ce0b5e448::t_837f4b2f3ffa2a 1-16,20-81,89,92,97-98
+src/agent_assistant/tools/agent_executor_files.py
+  s_161b8ce0b5e448::t_60a327368dbee4 1-244
+src/agent_assistant/agent_executor.py
+  s_161b8ce0b5e448::t_c1a130a17fd22b 118
+  s_161b8ce0b5e448::t_58f53f24276519 10,12,14,17,86-87,97-98,100,103,114-117,119-120,147
+  s_161b8ce0b5e448::t_bf9bc8c203c58b 43-44,46-48,51-58,62-64,69-76,78-84,89
+  s_161b8ce0b5e448::t_b24c459f5439cb 99
+  s_161b8ce0b5e448::t_29df6e656fd2db 18-19
+  s_161b8ce0b5e448::t_00fb76b407de93 27-31
+src/agent_assistant/tools/agent_executor_shell.py
+  s_161b8ce0b5e448::t_6c146ebdb0d46a 1-303
+src/agent_assistant/subagents.py
+  s_161b8ce0b5e448::t_1b8cab66234caa 1-25
+src/agent_assistant/tools/agent_executor_tools.py
+  s_161b8ce0b5e448::t_d238e3e54dc7fd 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.50-trip",
+  "base_commit_sha": "b238a727ea5c976b7ef435d5956f5151a31f1473",
+  "prompts": {},
+  "sessions": {
+    "s_161b8ce0b5e448": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4bda3e8f-ee75-4a3a-8c5a-8f73c8dd4eed",
+        "model": "grok-4.7"
+      },
+      "human_author": "z.zhen <z.zhen@trip.com>"
+    }
+  }
+}
