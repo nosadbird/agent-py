@@ -2,37 +2,36 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_core.tools import tool
-from langchain.agents.middleware import wrap_tool_call
-from langchain_core.messages import ToolMessage
-from langchain.messages import RemoveMessage
-from langgraph.graph.message import REMOVE_ALL_MESSAGES
-from langgraph.checkpoint.memory import InMemorySaver
-from langchain.agents.middleware import HumanInTheLoopMiddleware
-from langchain.agents import create_agent, AgentState
-from langchain.agents.middleware import before_model
-from langgraph.runtime import Runtime
-from typing import Any
+from langchain_core.messages import AIMessage, HumanMessage
 
+from agent_assistant.checkpointer import build_memory_checkpointer
 from agent_assistant.config import Settings, load_settings
+from agent_assistant.middleware import handle_tool_errors, summary_messages
 from agent_assistant.model import create_chat_model
 from agent_assistant.skills import SkillRegistry
+from agent_assistant.subagents import call_subagent1
+from agent_assistant.tools.agent_executor_files import ExecutorFileTools
+from agent_assistant.tools.agent_executor_shell import ExecutorShellRunner, console_approve
+from agent_assistant.tools.agent_executor_tools import get_current_datetime
 
 choice = "not_stream"
 
 _EXIT_COMMANDS = frozenset({"/exit", "exit", "quit"})
 
 _SYSTEM_PROMPT_BASE = (
-    "你是一个中文本地助手。需要时调用提供的工具，根据工具返回结果继续作答。"
+    "你是一个中文本地编码助手。需要时调用工具完成项目内的读写、搜索和命令执行，"
+    "再根据工具返回结果继续作答。工具输出可能被截断。"
+    "read_text、write_text、list_directory、search_text 只能访问项目目录内的相对路径。"
+    "run_shell 在项目根目录执行。只读白名单命令会直接执行；"
+    "危险命令必须等待用户审批，不得猜测审批结果。"
     "若任务与 Skills catalog 中的技能相关，先用 load_skill 读取完整说明，再按其步骤执行。"
 )
+
 
 def _build_system_prompt(skills: SkillRegistry) -> str:
     return (
@@ -40,152 +39,54 @@ def _build_system_prompt(skills: SkillRegistry) -> str:
         f"Skills catalog（需要时使用 load_skill 按需读取）：\n{skills.catalog_text()}"
     )
 
-@before_model
-def summary_messages(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
-    """将较早的对话历史总结为摘要，仅保留最近几条消息，避免超出上下文窗口。"""
-    messages = state["messages"]
 
-    # 阈值可以适当调大，避免消息太少时就触发（没有必要总结）
-    if len(messages) <= 3:
-        return None
+def recursion_limit_for(settings: Settings) -> int:
+    """把配置中的步数上限折成 LangGraph recursion_limit。
 
-    # 保留最近几条消息（奇偶判断保证不截断到"半轮对话"）
-    keep_count = 4 if len(messages) % 2 == 0 else 5
-    recent_messages = messages[-keep_count:]
-    messages_to_summarize = messages[:-keep_count]
-
-    if not messages_to_summarize:
-        return None
-
-    # 取出已有摘要（上一次裁剪时生成的），实现摘要的"滚动更新"
-    existing_summary = state.get("summary", "")
-
-    # 把需要总结的这部分消息拼接成文本
-    conversation_text = "\n".join(
-        f"{msg.type}: {msg.content}" for msg in messages_to_summarize
-    )
-
-    summary_prompt = (
-        "你是一个对话摘要助手。请将下面的新对话内容整合进已有摘要中，"
-        "输出一个简洁但完整的摘要，务必保留关键信息（如用户姓名、偏好、"
-        "已经讨论过的事项、已经给出的结论等），不要遗漏重要细节。\n\n"
-        f"已有摘要：\n{existing_summary or '（无）'}\n\n"
-        f"新对话内容：\n{conversation_text}\n\n"
-        "请输出更新后的摘要："
-    )
-    root = Path.cwd()
-    try:
-        settings = load_settings(root)
-    except Exception:
-        print(
-            "配置加载失败：请参考 .env.example 创建 .env，"
-            "并填写有效的 DASHSCOPE_API_KEY。"
-        )
-        return
-    summary_model = create_chat_model(settings)
-    summary_response = summary_model.invoke(summary_prompt)
-    new_summary = summary_response.content
-
-    summary_message = SystemMessage(
-        content=f"[以下是此前对话的摘要，供参考]\n{new_summary}"
-    )
-    
-    return {
-        "messages": [
-            RemoveMessage(id=REMOVE_ALL_MESSAGES),
-            summary_message,
-            *recent_messages,
-        ],
-        "summary": new_summary,  # 更新持久化的摘要字段
-    }
-
-@before_model
-def trim_messages(state: AgentState, runtime: Runtime) -> dict[str, Any] | None:
-    """Keep only the last few messages to fit context window."""
-    messages = state["messages"]
-    if len(messages) <= 3:
-        return None  # No changes needed
-
-    first_msg = messages[0]
-    recent_messages = messages[-3:] if len(messages) % 2 == 0 else messages[-4:]
-    new_messages = [first_msg] + recent_messages
-
-    final_message = {
-        "messages": [
-            RemoveMessage(id=REMOVE_ALL_MESSAGES),
-            *new_messages
-        ]
-    }
-    return final_message
+    一轮工具调用通常经过模型节点和工具节点，因此按步数的两倍设置。
+    """
+    return settings.agent_max_steps * 2
 
 
-@wrap_tool_call
-def handle_tool_errors(request, handler):
-    """使用自定义消息处理工具执行错误。"""
-    print(request)
-    user_input = input("是否允许调用该工具: y/n? ：").strip()
-    if user_input != 'y' :
-        return ToolMessage(
-            content="用户拒绝调用该工具，请尝试其它工具。",
-            tool_call_id=request.tool_call["id"]
-        )
-    
-    try:
-        return handler(request)
-    except Exception as e:
-        # 向模型返回自定义错误消息
-        return ToolMessage(
-            content=f"工具错误：请检查您的输入并重试。({str(e)})",
-            tool_call_id=request.tool_call["id"]
-        )
-
-
-@tool
-def add_numbers(a: float, b: float) -> float:
-    """计算两个数的和，返回 a + b。"""
-    raise Exception("错误描述信息")
-    # return a + b
-
-
-@tool
-def get_current_datetime() -> str:
-    """获取当前本地日期和时间，格式为 YYYY-MM-DD HH:MM:SS。"""
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-#################### subAgent
-settings = load_settings(Path.cwd())
-subModel = create_chat_model(settings)
-subagent1 = create_agent(model=subModel)
-
-@tool(
-    "行程规划助手",
-    description="你是一个行程规划的助手，帮用户合理的规划形成"
-)
-def call_subagent1(query: str):
-    result = subagent1.invoke({
-        "messages": [{"role": "user", "content": query}]
-    })
-    print("subAgent:"+result["messages"][-1].content)
-    return result["messages"][-1].content
-#################### subAgent
+def _run_config(agent: Any) -> dict[str, Any]:
+    bound = getattr(agent, "config", None)
+    config: dict[str, Any] = {"configurable": {"thread_id": "1"}}
+    if isinstance(bound, dict):
+        limit = bound.get("recursion_limit")
+        if isinstance(limit, int) and limit > 0:
+            config["recursion_limit"] = limit
+    return config
 
 
 def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | None = None):
-    """创建带求和/时间两个工具的 create_agent 实例。"""
+    """创建带项目文件、搜索、Shell 和技能工具的 create_agent 实例。"""
+    if settings is None:
+        settings = load_settings(Path.cwd())
     if model is None:
-        if settings is None:
-            settings = load_settings(Path.cwd())
         model = create_chat_model(settings)
     root = Path.cwd()
     skills = SkillRegistry(root)
-    return create_agent(
-        model=model,
-        tools=[add_numbers, get_current_datetime, call_subagent1, *skills.as_tools()],
-        system_prompt=_build_system_prompt(skills),
-        middleware=[handle_tool_errors,summary_messages,],
-        checkpointer=InMemorySaver() ### 内存存储
+    files = ExecutorFileTools(root, max_chars=settings.shell_max_output_chars)
+    shell = ExecutorShellRunner(
+        root,
+        timeout=settings.shell_timeout_seconds,
+        max_chars=settings.shell_max_output_chars,
+        approve=console_approve,
     )
+    graph = create_agent(
+        model=model,
+        tools=[
+            get_current_datetime,
+            call_subagent1,
+            *files.as_tools(),
+            *shell.as_tools(),
+            *skills.as_tools(),
+        ],
+        system_prompt=_build_system_prompt(skills),
+        middleware=[handle_tool_errors, summary_messages],
+        checkpointer=build_memory_checkpointer(),
+    )
+    return graph.with_config({"recursion_limit": recursion_limit_for(settings)})
 
 
 def ask_agent(agent: Any, message: str) -> str:
@@ -193,9 +94,12 @@ def ask_agent(agent: Any, message: str) -> str:
     cleaned = message.strip()
     if not cleaned:
         raise ValueError("用户输入不能为空")
-    state = agent.invoke({"messages": [HumanMessage(content=cleaned)]},
-                         {"configurable": {"thread_id": "1"}})
+    state = agent.invoke(
+        {"messages": [HumanMessage(content=cleaned)]},
+        _run_config(agent),
+    )
     return final_text(state)
+
 
 def final_text(state: dict[str, Any]) -> str:
     """从 Agent 返回状态中提取最终文本回答。"""
@@ -207,10 +111,13 @@ def final_text(state: dict[str, Any]) -> str:
                 return content.strip()
     return "模型没有返回有效内容。"
 
-def ask_agent_stream(agent,message: str) -> str:
-    for chunk in agent.stream({"messages": [HumanMessage(content=message)]}, 
-                              {"configurable": {"thread_id": "1"}},
-                              stream_mode="updates"):
+
+def ask_agent_stream(agent, message: str) -> str:
+    for chunk in agent.stream(
+        {"messages": [HumanMessage(content=message)]},
+        _run_config(agent),
+        stream_mode="updates",
+    ):
         for step, data in chunk.items():
             print(f"step: {step}")
             print(f"content: {data['messages'][-1].content_blocks}")
@@ -237,7 +144,7 @@ def main() -> None:
             if user_input.lower() in _EXIT_COMMANDS:
                 print("已退出。")
                 return
-            
+
             if choice == "stream":
                 ask_agent_stream(agent, user_input)
             else:
