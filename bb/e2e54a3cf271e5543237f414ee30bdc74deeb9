@@ -1,0 +1,137 @@
+src/agent_assistant/middleware.py
+  s_9c5e8d42cbe1a4::t_185e35168fcc7c 9
+  s_9c5e8d42cbe1a4::t_c49aca8f096bd5 114-136
+tests/test_model.py
+  s_161b8ce0b5e448::t_8862bf12a621d5 35-48
+src/agent_assistant/thinking_output.py
+  s_9c5e8d42cbe1a4::t_f0811edb2b5b2a 1
+  s_161b8ce0b5e448::t_6b8ffc274118ec 2-62
+  s_9c5e8d42cbe1a4::t_42eede6687e0c5 63-73
+src/agent_assistant/tools/agent_executor_tools.py
+  s_9c5e8d42cbe1a4::t_7604f3efdab987 11-20
+.env.example
+  s_9c5e8d42cbe1a4::t_841169d0ab0c77 22-25
+tests/tools/test_agent_executor_tools.py
+  s_9c5e8d42cbe1a4::t_cc8fd6445bf586 1-6
+tests/test_agent_executor_runtime.py
+  s_9c5e8d42cbe1a4::t_da4d477bdff21e 94-112
+  s_9c5e8d42cbe1a4::t_6bea9a8aeeb2d7 4
+  s_9c5e8d42cbe1a4::t_dd812e18eab0c3 178-206
+  s_9c5e8d42cbe1a4::t_27cabaf76db3ba 132-148
+  s_9c5e8d42cbe1a4::t_11202e577a7dd2 12-14,16-18
+  s_9c5e8d42cbe1a4::t_38fd3892d3dc70 20-50
+  s_9c5e8d42cbe1a4::t_148948f0ea78c4 15
+  s_9c5e8d42cbe1a4::t_ca5f89e71f5b93 92-93,113-131
+  s_9c5e8d42cbe1a4::t_9a8d66e19fbfb6 2,5-10
+  s_9c5e8d42cbe1a4::t_fff1b8e52cda69 149-177
+tests/tools/test_agent_executor_files.py
+  s_9c5e8d42cbe1a4::t_fcc3fb722d1f6c 44-78
+  s_9c5e8d42cbe1a4::t_160f4c25ac43c2 79-91
+  s_9c5e8d42cbe1a4::t_585112a056ea2c 126-127
+  s_9c5e8d42cbe1a4::t_8805ea738cc900 92-93,113-125,128
+  s_9c5e8d42cbe1a4::t_13c490c0771070 24
+  s_9c5e8d42cbe1a4::t_710950a63092b5 94-112
+src/agent_assistant/tools/agent_executor_files.py
+  s_9c5e8d42cbe1a4::t_a3c2d678a8645a 144-145
+  s_9c5e8d42cbe1a4::t_4d180d89551887 102-108,113-115
+  s_9c5e8d42cbe1a4::t_da49b3f5b02238 134-140,156-161,166-167,169-171,173-175,182,184,186-200
+  s_9c5e8d42cbe1a4::t_d92bb20fa5a2a0 5,8,10,15
+  s_9c5e8d42cbe1a4::t_c41aba51e98b2c 150-152
+  s_9c5e8d42cbe1a4::t_42c27a4d0a718b 43-48,51-65
+  s_9c5e8d42cbe1a4::t_6701cc9f3248ad 131
+  s_9c5e8d42cbe1a4::t_5544636938ffe2 162-165,168,172,176-181,183,185
+  s_9c5e8d42cbe1a4::t_1297d8df926797 313-315
+  s_9c5e8d42cbe1a4::t_90b993e30f7a39 142,146-148
+  s_9c5e8d42cbe1a4::t_d5f9d9498ae3c5 345-351
+  s_9c5e8d42cbe1a4::t_1ebf9686ff0ad2 49-50
+src/agent_assistant/api.py
+  s_161b8ce0b5e448::t_9cd149767c5961 51,58
+  s_161b8ce0b5e448::t_132c7822b3b76d 22
+src/agent_assistant/agent_executor.py
+  s_9c5e8d42cbe1a4::t_d273ddb1021a39 33-37
+  s_9c5e8d42cbe1a4::t_e4c7170e08fff6 112-164,166,174
+  s_9c5e8d42cbe1a4::t_cdba74a981cfdb 67-71
+  s_9c5e8d42cbe1a4::t_b2e0d61077f560 15
+  s_9c5e8d42cbe1a4::t_4e04b4aefbb417 212-215,217-218,221,226,234-235,237-238,240-247,250-254
+  s_161b8ce0b5e448::t_c60fdc05e0a764 216
+  s_9c5e8d42cbe1a4::t_4a4374e2aae38b 5
+  s_9c5e8d42cbe1a4::t_e7681341672780 248-249
+  s_9c5e8d42cbe1a4::t_7a44bb2dc63c87 275
+  s_9c5e8d42cbe1a4::t_f7604804cc0eef 258-261
+  s_9c5e8d42cbe1a4::t_1364f6e5e420db 98
+  s_9c5e8d42cbe1a4::t_2768b3c8cadf54 79-84
+  s_9c5e8d42cbe1a4::t_c86bb40344e0e1 92
+  s_9c5e8d42cbe1a4::t_4033611c4c5514 21-24
+  s_9c5e8d42cbe1a4::t_2e44a04a91cd0d 76
+  s_9c5e8d42cbe1a4::t_ccfd4b5cdfcdd9 211
+  s_9c5e8d42cbe1a4::t_946d7ded5116a7 227-233,236,239
+  s_9c5e8d42cbe1a4::t_9957e0ddcedf71 290-291
+  s_161b8ce0b5e448::t_a74de6273b0773 292
+  s_9c5e8d42cbe1a4::t_706f43fde3dbb5 90-91
+  s_9c5e8d42cbe1a4::t_cbc7c922aca6d5 188-210
+  s_9c5e8d42cbe1a4::t_d4b0d5a560ab42 220
+  s_9c5e8d42cbe1a4::t_28e1a24ac45ce6 6
+  s_9c5e8d42cbe1a4::t_4c293a124019ee 219
+  s_161b8ce0b5e448::t_af9a72f28b5fed 255
+  s_9c5e8d42cbe1a4::t_989ae792f5b077 13,20,26
+  s_9c5e8d42cbe1a4::t_31da497052c74c 287
+src/agent_assistant/tools/agent_executor_shell.py
+  s_9c5e8d42cbe1a4::t_d2d2dc79c4c782 299-302,305,323-344,347-349,351-352,370-372,376,381-383,385,392-395,398-400,426-428
+  s_9c5e8d42cbe1a4::t_7f827301d02d6d 353-355,363-367
+  s_9c5e8d42cbe1a4::t_8e32e6edf76f0d 269-271,281-282,284,295-296
+  s_9c5e8d42cbe1a4::t_791d3005a1e166 396-397
+  s_9c5e8d42cbe1a4::t_3bd1e79d68d235 224-245,247-257
+  s_9c5e8d42cbe1a4::t_b5536a69944234 345-346,350,356-362,368-369
+  s_9c5e8d42cbe1a4::t_d73ee4b0061196 403-412
+  s_9c5e8d42cbe1a4::t_30347886acdf23 373-375,377-379,384,390
+  s_9c5e8d42cbe1a4::t_1c846b398ca1fe 444
+  s_9c5e8d42cbe1a4::t_ee96fc3f31977d 5,9-10,13,21
+  s_9c5e8d42cbe1a4::t_eb63c7147c601e 401,420-425,429-437
+  s_9c5e8d42cbe1a4::t_a83ae68a2cb093 6
+  s_9c5e8d42cbe1a4::t_b8bdb2b70806c7 380,386-389,391
+  s_9c5e8d42cbe1a4::t_515eadc5b18b03 246
+  s_9c5e8d42cbe1a4::t_de36715a0e5f5e 402,413-419
+tests/tools/test_agent_executor_shell.py
+  s_9c5e8d42cbe1a4::t_32f0e6ff91d8d8 12
+  s_9c5e8d42cbe1a4::t_0f9cf0f68169a0 1
+  s_9c5e8d42cbe1a4::t_0562802fca8864 128-144
+  s_9c5e8d42cbe1a4::t_e25ddc7d058ca6 19-32
+  s_9c5e8d42cbe1a4::t_ef7c154f5c4bcd 110-127
+tests/test_thinking_output.py
+  s_161b8ce0b5e448::t_199ff91eaeba22 1-5,7-16,18-47
+  s_9c5e8d42cbe1a4::t_d768df007c1b11 17
+  s_9c5e8d42cbe1a4::t_a5e6b6e3133255 6
+src/agent_assistant/config.py
+  s_9c5e8d42cbe1a4::t_e6398309b5efa9 4
+  s_9c5e8d42cbe1a4::t_71cad708274ef8 29-30
+docs/superpowers/plans/agent-executor-minimal-upgrade.md
+  s_9c5e8d42cbe1a4::t_56891e24fc62fa 1-124
+src/agent_assistant/agent_events.py
+  s_9c5e8d42cbe1a4::t_c00993f13fc13c 1-27
+src/agent_assistant/model.py
+  s_161b8ce0b5e448::t_be98b7505c2625 3-4,11-15,17-19,27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "bbe2e54a3cf271e5543237f414ee30bdc74deeb9",
+  "prompts": {},
+  "sessions": {
+    "s_161b8ce0b5e448": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "4bda3e8f-ee75-4a3a-8c5a-8f73c8dd4eed",
+        "model": "grok-4.7"
+      },
+      "human_author": "z.zhen <z.zhen@trip.com>"
+    },
+    "s_9c5e8d42cbe1a4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ab26d540-3ec7-422a-88f8-9dfa138f534f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "z.zhen <z.zhen@trip.com>"
+    }
+  }
+}
