@@ -60,6 +60,25 @@ def _save_reasoning(message, reasoning: object) -> None:
         message.additional_kwargs[_REASONING_KEY] = reasoning
 
 
+def reasoning_text(message: object) -> str:
+    """提取一条模型消息中的百炼思考文本。"""
+    if not isinstance(message, AIMessage):
+        return ""
+    reasoning = (message.additional_kwargs or {}).get(_REASONING_KEY)
+    return reasoning if isinstance(reasoning, str) else ""
+
+
+def reasoning_from_state(state: dict[str, Any]) -> str:
+    """收集最近一轮用户消息之后的思考文本。"""
+    messages = state.get("messages") or []
+    start = 0
+    for index, message in enumerate(messages):
+        if getattr(message, "type", None) == "human":
+            start = index
+    parts = [reasoning_text(message).strip() for message in messages[start:]]
+    return "\n\n".join(part for part in parts if part)
+
+
 def create_thinking_model(settings: Settings) -> _ThinkingModel:
     """创建保留并回传 reasoning_content 的百炼模型。"""
     return _ThinkingModel(

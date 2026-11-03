@@ -3,7 +3,11 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 from agent_assistant.config import Settings
-from agent_assistant.thinking_output import create_thinking_model
+from agent_assistant.thinking_output import (
+    create_thinking_model,
+    reasoning_from_state,
+    reasoning_text,
+)
 
 
 def test_model_keeps_and_sends_reasoning(tmp_path: Path) -> None:
@@ -45,3 +49,21 @@ def test_model_keeps_and_sends_reasoning(tmp_path: Path) -> None:
     )
     assert payload["messages"][1]["reasoning_content"] == "因为上次的结论"
     assert payload["extra_body"]["enable_thinking"] is True
+
+
+def test_reasoning_is_available_for_stream_and_latest_turn() -> None:
+    chunk = AIMessageChunk(
+        content="",
+        additional_kwargs={"reasoning_content": "先检查时间工具"},
+    )
+    assert reasoning_text(chunk) == "先检查时间工具"
+    state = {
+        "messages": [
+            HumanMessage("旧问题"),
+            AIMessage("旧回答", additional_kwargs={"reasoning_content": "旧思考"}),
+            HumanMessage("新问题"),
+            AIMessage("", additional_kwargs={"reasoning_content": "先查文件"}),
+            AIMessage("答案", additional_kwargs={"reasoning_content": "再总结"}),
+        ]
+    }
+    assert reasoning_from_state(state) == "先查文件\n\n再总结"

@@ -156,11 +156,19 @@ async def test_stream_resets_tool_chunks_between_model_rounds(capsys) -> None:
         async def astream(self, *_args, **_kwargs):
             yield AIMessageChunk(
                 content="",
+                additional_kwargs={"reasoning_content": "先读取文件"},
+            )
+            yield AIMessageChunk(
+                content="",
                 tool_call_chunks=[
                     {"name": "read_text", "args": '{"path":"a.py"}', "id": "1", "index": 0}
                 ],
             )
             yield ToolMessage("first", tool_call_id="1", name="read_text")
+            yield AIMessageChunk(
+                content="",
+                additional_kwargs={"reasoning_content": "再运行命令"},
+            )
             yield AIMessageChunk(
                 content="",
                 tool_call_chunks=[
@@ -172,6 +180,9 @@ async def test_stream_resets_tool_chunks_between_model_rounds(capsys) -> None:
 
     await ask_agent_stream(FakeAgent(), "work")
     output = capsys.readouterr().out
+    assert output.count("思考：") == 2
+    assert "思考：\n先读取文件\n● read_text: a.py" in output
+    assert "思考：\n再运行命令\n● run_shell: pwd" in output
     assert "read_text: a.py" in output
     assert "run_shell: pwd" in output
     assert "done" in output

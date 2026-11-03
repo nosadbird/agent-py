@@ -17,7 +17,11 @@ from agent_assistant.checkpointer import build_memory_checkpointer
 from agent_assistant.config import Settings, load_settings
 from agent_assistant.middleware import handle_tool_errors, summary_messages
 from agent_assistant.skills import SkillRegistry
-from agent_assistant.thinking_output import create_thinking_model
+from agent_assistant.thinking_output import (
+    create_thinking_model,
+    reasoning_from_state,
+    reasoning_text,
+)
 from agent_assistant.tools.agent_executor_files import (
     ExecutorFileTools,
     confirm_file_change,
@@ -32,7 +36,7 @@ _EXIT_COMMANDS = frozenset({"/exit", "exit", "quit"})
 _SYSTEM_PROMPT_BASE = (
     "你是一个本地智能 Agent 助手。需要时调用工具，再根据工具返回结果完成用户任务。"
     "工具输出可能被截断。多步骤任务先调用 update_plan 公布简短行动计划，简单问答无需计划。"
-    "只展示计划、工具操作、执行结果和最终回答，不输出内部思维链。"
+    "思考过程通过专用字段展示，正式回答仍应简洁清楚。"
     "run_shell 在项目根目录执行；需要审批时必须等待用户决定，不得猜测审批结果。"
     "修改代码后应运行最小相关测试，并如实说明验证是否执行及结果。"
     "若任务与 Skills catalog 中的技能相关，先用 load_skill 读取完整说明，再按其步骤执行。"
@@ -113,7 +117,6 @@ class AgentTurn:
 
     reply: str
     events: tuple[AgentEvent, ...] = ()
-    # 临时兼容现有 API；原始思维链不再对外输出。
     thinking: str = ""
 
 
@@ -171,7 +174,11 @@ def ask_agent(agent: Any, message: str) -> AgentTurn:
         {"messages": [HumanMessage(content=cleaned)]},
         _run_config(agent),
     )
-    return AgentTurn(reply=final_text(state), events=events_from_state(state))
+    return AgentTurn(
+        reply=final_text(state),
+        events=events_from_state(state),
+        thinking=reasoning_from_state(state),
+    )
 
 
 def final_text(state: dict[str, Any]) -> str:
@@ -209,10 +216,12 @@ def _tool_calls_from_chunks(
 
 
 async def ask_agent_stream(agent: Any, message: str) -> None:
-    """流式展示真实工具事件和最终回答，不展示内部思维链。"""
+    """分别流式展示思考、真实工具事件和最终回答。"""
     cleaned = message.strip()
     if not cleaned:
         raise ValueError("用户输入不能为空")
+    started_thinking = False
+    thinking_active = False
     started_answer = False
     seen_calls: set[str] = set()
     tool_names: dict[str, str] = {}
@@ -224,6 +233,14 @@ async def ask_agent_stream(agent: Any, message: str) -> None:
     ):
         token = chunk[0] if isinstance(chunk, tuple) else chunk
         if isinstance(token, AIMessage):
+            reasoning = reasoning_text(token)
+            if reasoning:
+                if not thinking_active:
+                    prefix = "\n" if started_thinking else ""
+                    print(f"{prefix}思考：", flush=True)
+                    started_thinking = True
+                    thinking_active = True
+                print(reasoning, end="", flush=True)
             calls: list[tuple[str, str, object]] = [
                 (str(call.get("id") or ""), str(call.get("name") or "未知工具"), call.get("args"))
                 for call in token.tool_calls
@@ -236,11 +253,13 @@ async def ask_agent_stream(agent: Any, message: str) -> None:
                 marker = call_id or f"{name}:{args}"
                 if marker not in seen_calls:
                     seen_calls.add(marker)
+                    thinking_active = False
                     print(f"\n● {_tool_summary(name, args)}", flush=True)
             if not token.tool_calls and not getattr(token, "tool_call_chunks", []):
                 content = _text_content(token.content)
                 if content:
                     if not started_answer:
+                        thinking_active = False
                         print("\n回答：", flush=True)
                         started_answer = True
                     print(content, end="", flush=True)
@@ -287,6 +306,8 @@ def main() -> None:
                 asyncio.run(ask_agent_stream(agent, user_input))
             else:
                 turn = ask_agent(agent, user_input)
+                if turn.thinking:
+                    print(f"思考：\n{turn.thinking}\n")
                 for event in turn.events:
                     print(f"{event.kind}：{event.text}")
                 print(f"回答：\n{turn.reply}")
