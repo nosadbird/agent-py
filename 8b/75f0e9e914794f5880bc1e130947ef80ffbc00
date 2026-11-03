@@ -1,0 +1,37 @@
+src/agent_assistant/thinking_output.py
+  s_9c5e8d42cbe1a4::t_b20cbbf0ececf6 63-81
+src/agent_assistant/agent_executor.py
+  s_9c5e8d42cbe1a4::t_79e949354af49e 219,223
+  s_9c5e8d42cbe1a4::t_a8c63b7ce451ea 238-240,242
+  s_9c5e8d42cbe1a4::t_01bdcb7168db6c 20-24
+  s_9c5e8d42cbe1a4::t_f6098deca1c6b6 177-181
+  s_9c5e8d42cbe1a4::t_4cc4a6ab0ac199 224
+  s_9c5e8d42cbe1a4::t_1e41d476cb73a8 256
+  s_9c5e8d42cbe1a4::t_d78f6c17f48dae 39
+  s_9c5e8d42cbe1a4::t_aee9ed0b3c4480 262
+  s_9c5e8d42cbe1a4::t_a6484ff91fe14b 309-310
+  s_9c5e8d42cbe1a4::t_36dbe4f79ae3a8 236-237,241,243
+tests/test_thinking_output.py
+  s_9c5e8d42cbe1a4::t_6797f8bfe5ffec 52-69
+  s_9c5e8d42cbe1a4::t_7f19149bac3c3c 6-10
+tests/test_agent_executor_runtime.py
+  s_9c5e8d42cbe1a4::t_3eb37660a06f9f 159-160
+  s_9c5e8d42cbe1a4::t_3194807857507e 170-171
+  s_9c5e8d42cbe1a4::t_0952950a132944 183-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "8b75f0e9e914794f5880bc1e130947ef80ffbc00",
+  "prompts": {},
+  "sessions": {
+    "s_9c5e8d42cbe1a4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ab26d540-3ec7-422a-88f8-9dfa138f534f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "z.zhen <z.zhen@trip.com>"
+    }
+  }
+}
