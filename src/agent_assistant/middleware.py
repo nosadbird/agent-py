@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from langchain.agents import AgentState
-from langchain.agents.middleware import before_model, wrap_tool_call
+from langchain.agents.middleware import AgentMiddleware, before_model
 from langchain.messages import RemoveMessage
 from langchain_core.messages import SystemMessage, ToolMessage
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
@@ -111,7 +111,26 @@ def truncate_tool_result(result, max_chars: int):
     return result
 
 
-@wrap_tool_call
-def handle_tool_errors(request, handler):
-    """捕获工具异常并截断输出。危险命令的审批由 Shell 工具自己负责。"""
-    return guard_tool_result(request, handler, output_char_limit())
+async def aguard_tool_result(request, handler, max_chars: int):
+    """异步执行工具，把异常变成模型可读消息并截断输出。"""
+    try:
+        result = await handler(request)
+    except Exception as exc:
+        result = ToolMessage(
+            content=f"工具错误：请检查您的输入并重试。({str(exc)})",
+            tool_call_id=request.tool_call["id"],
+        )
+    return truncate_tool_result(result, max_chars)
+
+
+class ToolErrorMiddleware(AgentMiddleware):
+    """同时支持同步和异步 Agent 调用的工具错误中间件。"""
+
+    def wrap_tool_call(self, request, handler):
+        return guard_tool_result(request, handler, output_char_limit())
+
+    async def awrap_tool_call(self, request, handler):
+        return await aguard_tool_result(request, handler, output_char_limit())
+
+
+handle_tool_errors = ToolErrorMiddleware()

@@ -19,6 +19,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
+    thinking: str = ""
 
 
 def create_app() -> FastAPI:
@@ -47,14 +48,14 @@ def create_app() -> FastAPI:
         if agent is None:
             raise HTTPException(status_code=503, detail="Agent 尚未就绪")
         try:
-            reply = ask_agent(agent, body.message)
+            shown = ask_agent(agent, body.message)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             raise HTTPException(
                 status_code=500, detail=f"Agent 执行失败：{type(exc).__name__}"
             ) from exc
-        return ChatResponse(reply=reply)
+        return ChatResponse(reply=shown.reply, thinking=shown.thinking)
 
     return app
 

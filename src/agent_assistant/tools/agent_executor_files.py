@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import difflib
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
+from collections.abc import Callable
 
 from langchain_core.tools import BaseTool, StructuredTool
 from pydantic import BaseModel, ConfigDict, Field
+
+from agent_assistant.agent_events import EventHandler, emit_event
 
 _TRUNCATED = "\n……（已截断）"
 _MAX_SEARCH_FILES = 1000
@@ -33,6 +38,29 @@ class _SearchInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pattern: str = Field(..., description="Python 正则表达式")
     path: str = Field(".", description="项目内相对文件或目录路径")
+
+
+class _UndoInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+@dataclass(frozen=True)
+class _WriteSnapshot:
+    relative_path: str
+    target: Path
+    before: str | None
+    after: str
+
+
+def confirm_file_change(path: str, diff: str) -> bool:
+    """展示文件差异，仅 y/yes 视为同意。"""
+    print(f"Agent 请求修改文件：{path}\n{diff}")
+    try:
+        answer = input("是否应用？仅输入 y/yes 表示同意：")
+    except (KeyboardInterrupt, EOFError):
+        print("文件修改已取消。")
+        return False
+    return answer.strip().lower() in {"y", "yes"}
 
 
 def truncate_text(text: str, max_chars: int) -> str:
@@ -71,11 +99,20 @@ def resolve_project_path(root: Path, user_path: str) -> Path:
 class ExecutorFileTools:
     """提供受项目根目录约束的 UTF-8 文件操作。"""
 
-    def __init__(self, root: Path, max_chars: int = 12_000) -> None:
+    def __init__(
+        self,
+        root: Path,
+        max_chars: int = 12_000,
+        approve: Callable[[str, str], bool] | None = None,
+        on_event: EventHandler | None = None,
+    ) -> None:
         if max_chars <= 0:
             raise ValueError("max_chars 必须为正整数")
         self._root = root.resolve()
         self._max_chars = max_chars
+        self._approve = approve
+        self._on_event = on_event
+        self._last_write: _WriteSnapshot | None = None
 
     def read_text(self, path: str) -> str:
         try:
@@ -91,15 +128,76 @@ class ExecutorFileTools:
     def write_text(self, path: str, content: str) -> str:
         try:
             target = resolve_project_path(self._root, path)
+            original_target = target
             if target.exists() and (target.is_symlink() or not target.is_file()):
                 return f"写入错误：目标不是项目内普通文件：{path}"
+            before = target.read_text(encoding="utf-8") if target.exists() else None
+            if before == content:
+                return f"文件内容未变化：{path}"
+            diff = self._diff(path, before, content)
+            emit_event(self._on_event, "file_change", diff)
+            if self._approve is not None and not self._approve(path, diff):
+                return f"文件修改未执行：{path}"
             target.parent.mkdir(parents=True, exist_ok=True)
-            # 创建目录后再次解析，防止父路径经符号链接或 junction 逃逸。
+            # 审批期间若文件被其他操作改过，则拒绝覆盖。
             target = resolve_project_path(self._root, path)
+            if target != original_target or target.is_symlink():
+                return f"写入取消：审批期间文件路径或类型已变化：{path}"
+            current = target.read_text(encoding="utf-8") if target.exists() else None
+            if current != before:
+                return f"写入取消：审批期间文件已变化：{path}"
             target.write_text(content, encoding="utf-8")
-            return f"写入成功：{target.relative_to(self._root).as_posix()}"
+            relative = target.relative_to(self._root).as_posix()
+            self._last_write = _WriteSnapshot(relative, target, before, content)
+            return f"写入成功：{relative}"
         except (OSError, ValueError, UnicodeError) as exc:
             return f"写入错误：{exc}"
+
+    def undo_last_write(self) -> str:
+        """撤销最近一次写入；若文件后来被改动则拒绝覆盖。"""
+        snapshot = self._last_write
+        if snapshot is None:
+            return "没有可撤销的文件写入"
+        try:
+            target = resolve_project_path(self._root, snapshot.relative_path)
+            if target != snapshot.target or target.is_symlink() or not target.is_file():
+                return "撤销失败：文件路径或类型已变化"
+            current = target.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return "撤销失败：文件已被其他操作删除"
+        except (OSError, ValueError, UnicodeError) as exc:
+            return f"撤销失败：{exc}"
+        if current != snapshot.after:
+            return "撤销失败：文件在 Agent 写入后又被修改"
+        relative = snapshot.relative_path
+        action = "删除新建文件" if snapshot.before is None else "恢复写入前内容"
+        if self._approve is not None and not self._approve(relative, action):
+            return "撤销未执行"
+        # 审批后再校验一次，防止等待确认期间发生路径替换或内容修改。
+        target = resolve_project_path(self._root, relative)
+        if target != snapshot.target or target.is_symlink() or not target.is_file():
+            return "撤销失败：审批期间文件路径或类型已变化"
+        if target.read_text(encoding="utf-8") != snapshot.after:
+            return "撤销失败：审批期间文件内容已变化"
+        if snapshot.before is None:
+            target.unlink()
+        else:
+            target.write_text(snapshot.before, encoding="utf-8")
+        self._last_write = None
+        return f"已撤销最近一次写入：{relative}"
+
+    def _diff(self, path: str, before: str | None, after: str) -> str:
+        old_lines = [] if before is None else before.splitlines(keepends=True)
+        new_lines = after.splitlines(keepends=True)
+        diff = "".join(
+            difflib.unified_diff(
+                old_lines,
+                new_lines,
+                fromfile=f"a/{path}",
+                tofile=f"b/{path}",
+            )
+        )
+        return truncate_text(diff or "（内容有变化）", self._max_chars)
 
     def list_directory(self, path: str = ".") -> str:
         try:
@@ -212,6 +310,9 @@ class ExecutorFileTools:
         async def asearch(pattern: str, path: str = ".") -> str:
             return self.search_text(pattern, path)
 
+        async def aundo() -> str:
+            return self.undo_last_write()
+
         return [
             StructuredTool.from_function(
                 func=self.read_text,
@@ -240,5 +341,12 @@ class ExecutorFileTools:
                 name="search_text",
                 description="用 Python 正则搜索项目内文本文件",
                 args_schema=_SearchInput,
+            ),
+            StructuredTool.from_function(
+                func=self.undo_last_write,
+                coroutine=aundo,
+                name="undo_last_write",
+                description="撤销 Agent 最近一次成功的文件写入",
+                args_schema=_UndoInput,
             ),
         ]

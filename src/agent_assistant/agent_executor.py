@@ -2,33 +2,39 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from langchain.agents import create_agent
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from agent_assistant.agent_events import AgentEvent, EventHandler
 from agent_assistant.checkpointer import build_memory_checkpointer
 from agent_assistant.config import Settings, load_settings
 from agent_assistant.middleware import handle_tool_errors, summary_messages
-from agent_assistant.model import create_chat_model
 from agent_assistant.skills import SkillRegistry
-from agent_assistant.subagents import call_subagent1
-from agent_assistant.tools.agent_executor_files import ExecutorFileTools
+from agent_assistant.thinking_output import create_thinking_model
+from agent_assistant.tools.agent_executor_files import (
+    ExecutorFileTools,
+    confirm_file_change,
+)
 from agent_assistant.tools.agent_executor_shell import ExecutorShellRunner, console_approve
-from agent_assistant.tools.agent_executor_tools import get_current_datetime
+from agent_assistant.tools.agent_executor_tools import get_current_datetime, update_plan
 
-choice = "not_stream"
+choice = "stream"
 
 _EXIT_COMMANDS = frozenset({"/exit", "exit", "quit"})
 
 _SYSTEM_PROMPT_BASE = (
-    "你是一个中文本地编码助手。需要时调用工具完成项目内的读写、搜索和命令执行，"
-    "再根据工具返回结果继续作答。工具输出可能被截断。"
-    "read_text、write_text、list_directory、search_text 只能访问项目目录内的相对路径。"
-    "run_shell 在项目根目录执行。只读白名单命令会直接执行；"
-    "危险命令必须等待用户审批，不得猜测审批结果。"
+    "你是一个本地智能 Agent 助手。需要时调用工具，再根据工具返回结果完成用户任务。"
+    "工具输出可能被截断。多步骤任务先调用 update_plan 公布简短行动计划，简单问答无需计划。"
+    "只展示计划、工具操作、执行结果和最终回答，不输出内部思维链。"
+    "run_shell 在项目根目录执行；需要审批时必须等待用户决定，不得猜测审批结果。"
+    "修改代码后应运行最小相关测试，并如实说明验证是否执行及结果。"
     "若任务与 Skills catalog 中的技能相关，先用 load_skill 读取完整说明，再按其步骤执行。"
 )
 
@@ -36,7 +42,7 @@ _SYSTEM_PROMPT_BASE = (
 def _build_system_prompt(skills: SkillRegistry) -> str:
     return (
         f"{_SYSTEM_PROMPT_BASE}\n\n"
-        f"Skills catalog（需要时使用 load_skill 按需读取）：\n{skills.catalog_text()}"
+        f"Skills catalog（需要时使用 load_skill 按需读取skills）：\n{skills.catalog_text()}"
     )
 
 
@@ -58,26 +64,38 @@ def _run_config(agent: Any) -> dict[str, Any]:
     return config
 
 
-def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | None = None):
-    """创建带项目文件、搜索、Shell 和技能工具的 create_agent 实例。"""
+def build_demo_agent(
+    model: BaseChatModel | None = None,
+    settings: Settings | None = None,
+    on_event: EventHandler | None = None,
+):
+    """创建带本地工具和skills的 create_agent 实例。"""
     if settings is None:
         settings = load_settings(Path.cwd())
     if model is None:
-        model = create_chat_model(settings)
+        model = create_thinking_model(settings)
     root = Path.cwd()
     skills = SkillRegistry(root)
-    files = ExecutorFileTools(root, max_chars=settings.shell_max_output_chars)
+    files = ExecutorFileTools(
+        root,
+        max_chars=settings.shell_max_output_chars,
+        approve=confirm_file_change,
+        on_event=on_event,
+    )
     shell = ExecutorShellRunner(
         root,
         timeout=settings.shell_timeout_seconds,
         max_chars=settings.shell_max_output_chars,
         approve=console_approve,
+        shell_name=settings.agent_shell,
+        bash_path=settings.agent_bash_path,
+        on_event=on_event,
     )
     graph = create_agent(
         model=model,
         tools=[
             get_current_datetime,
-            call_subagent1,
+            update_plan,
             *files.as_tools(),
             *shell.as_tools(),
             *skills.as_tools(),
@@ -89,8 +107,63 @@ def build_demo_agent(model: BaseChatModel | None = None, settings: Settings | No
     return graph.with_config({"recursion_limit": recursion_limit_for(settings)})
 
 
-def ask_agent(agent: Any, message: str) -> str:
-    """调用 Agent 并返回最终文本。"""
+@dataclass(frozen=True)
+class AgentTurn:
+    """一轮对话的最终回答和真实运行事件。"""
+
+    reply: str
+    events: tuple[AgentEvent, ...] = ()
+    # 临时兼容现有 API；原始思维链不再对外输出。
+    thinking: str = ""
+
+
+def _text_content(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict) and isinstance(block.get("text"), str):
+            parts.append(block["text"])
+    return "".join(parts)
+
+
+def _tool_summary(name: str, args: object) -> str:
+    if not isinstance(args, dict):
+        return name
+    if name == "run_shell":
+        return f"{name}: {args.get('command', '')}"
+    if "path" in args:
+        return f"{name}: {args['path']}"
+    if name == "load_skill":
+        return f"{name}: {args.get('name', '')}"
+    return name
+
+
+def events_from_state(state: dict[str, Any]) -> tuple[AgentEvent, ...]:
+    """从最终状态提取可审计的工具事件，不包含模型内部推理。"""
+    events: list[AgentEvent] = []
+    messages = state.get("messages") or []
+    start = 0
+    for index, message in enumerate(messages):
+        if isinstance(message, HumanMessage):
+            start = index
+    for message in messages[start:]:
+        if isinstance(message, AIMessage):
+            for call in message.tool_calls:
+                name = str(call.get("name") or "未知工具")
+                events.append(AgentEvent("tool_started", _tool_summary(name, call.get("args"))))
+        elif isinstance(message, ToolMessage):
+            text = _text_content(message.content).strip()
+            events.append(AgentEvent("tool_completed", text))
+    return tuple(events)
+
+
+def ask_agent(agent: Any, message: str) -> AgentTurn:
+    """调用 Agent，返回最终回答和可观察事件。"""
     cleaned = message.strip()
     if not cleaned:
         raise ValueError("用户输入不能为空")
@@ -98,7 +171,7 @@ def ask_agent(agent: Any, message: str) -> str:
         {"messages": [HumanMessage(content=cleaned)]},
         _run_config(agent),
     )
-    return final_text(state)
+    return AgentTurn(reply=final_text(state), events=events_from_state(state))
 
 
 def final_text(state: dict[str, Any]) -> str:
@@ -112,15 +185,80 @@ def final_text(state: dict[str, Any]) -> str:
     return "模型没有返回有效内容。"
 
 
-def ask_agent_stream(agent, message: str) -> str:
-    for chunk in agent.stream(
-        {"messages": [HumanMessage(content=message)]},
+def _tool_calls_from_chunks(
+    token: AIMessage,
+    pending: dict[int, dict[str, str]],
+) -> list[tuple[str, str, dict[str, Any]]]:
+    """合并流式工具调用分片，参数形成完整 JSON 后返回。"""
+    completed: list[tuple[str, str, dict[str, Any]]] = []
+    for chunk in getattr(token, "tool_call_chunks", []):
+        index = chunk.get("index")
+        key = index if isinstance(index, int) else len(pending)
+        item = pending.setdefault(key, {"id": "", "name": "", "args": ""})
+        for field in ("id", "name", "args"):
+            value = chunk.get(field)
+            if isinstance(value, str):
+                item[field] += value
+        try:
+            args = json.loads(item["args"])
+        except json.JSONDecodeError:
+            continue
+        if item["name"] and isinstance(args, dict):
+            completed.append((item["id"], item["name"], args))
+    return completed
+
+
+async def ask_agent_stream(agent: Any, message: str) -> None:
+    """流式展示真实工具事件和最终回答，不展示内部思维链。"""
+    cleaned = message.strip()
+    if not cleaned:
+        raise ValueError("用户输入不能为空")
+    started_answer = False
+    seen_calls: set[str] = set()
+    tool_names: dict[str, str] = {}
+    pending_calls: dict[int, dict[str, str]] = {}
+    async for chunk in agent.astream(
+        {"messages": [HumanMessage(content=cleaned)]},
         _run_config(agent),
-        stream_mode="updates",
+        stream_mode="messages",
     ):
-        for step, data in chunk.items():
-            print(f"step: {step}")
-            print(f"content: {data['messages'][-1].content_blocks}")
+        token = chunk[0] if isinstance(chunk, tuple) else chunk
+        if isinstance(token, AIMessage):
+            calls: list[tuple[str, str, object]] = [
+                (str(call.get("id") or ""), str(call.get("name") or "未知工具"), call.get("args"))
+                for call in token.tool_calls
+            ]
+            if getattr(token, "tool_call_chunks", []):
+                calls = _tool_calls_from_chunks(token, pending_calls)
+            for call_id, name, args in calls:
+                if call_id:
+                    tool_names[call_id] = name
+                marker = call_id or f"{name}:{args}"
+                if marker not in seen_calls:
+                    seen_calls.add(marker)
+                    print(f"\n● {_tool_summary(name, args)}", flush=True)
+            if not token.tool_calls and not getattr(token, "tool_call_chunks", []):
+                content = _text_content(token.content)
+                if content:
+                    if not started_answer:
+                        print("\n回答：", flush=True)
+                        started_answer = True
+                    print(content, end="", flush=True)
+        elif isinstance(token, ToolMessage):
+            # 下一次模型调用的工具 index 会从 0 重新开始。
+            pending_calls.clear()
+            name = token.name or tool_names.get(str(token.tool_call_id), "工具")
+            result = _text_content(token.content).strip()
+            if result:
+                label = "计划" if name == "update_plan" else "结果"
+                print(f"\n  └─ {label}：{result}", flush=True)
+    print()
+
+
+def _print_runtime_event(event: AgentEvent) -> None:
+    """CLI 只即时打印无法从 LangGraph 消息流获得的终端增量。"""
+    if event.kind == "terminal_output":
+        print(f"  │ {event.text}", flush=True)
 
 
 def main() -> None:
@@ -134,7 +272,7 @@ def main() -> None:
         )
         return
 
-    agent = build_demo_agent(settings=settings)
+    agent = build_demo_agent(settings=settings, on_event=_print_runtime_event)
     print("高级 API 示例已启动（create_agent 自动管理工具循环）。输入 /exit 退出。")
     try:
         while True:
@@ -146,9 +284,12 @@ def main() -> None:
                 return
 
             if choice == "stream":
-                ask_agent_stream(agent, user_input)
+                asyncio.run(ask_agent_stream(agent, user_input))
             else:
-                print(ask_agent(agent, user_input))
+                turn = ask_agent(agent, user_input)
+                for event in turn.events:
+                    print(f"{event.kind}：{event.text}")
+                print(f"回答：\n{turn.reply}")
     except (KeyboardInterrupt, EOFError):
         print("已取消并退出。")
 

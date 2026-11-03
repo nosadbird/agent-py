@@ -32,3 +32,17 @@ def test_create_chat_model_maps_settings(tmp_path: Path) -> None:
         max_retries=2,
     )
     assert result is mock_chat
+
+
+def test_enable_thinking_passes_extra_body(tmp_path: Path) -> None:
+    settings = Settings(
+        project_root=tmp_path,
+        dashscope_api_key="secret-key",
+        dashscope_base_url="https://example.com/v1",
+        dashscope_model="qwen-plus",
+        _env_file=None,
+    )
+    with patch("agent_assistant.model.ChatOpenAI", return_value=MagicMock()) as mock_cls:
+        create_chat_model(settings, enable_thinking=True)
+
+    assert mock_cls.call_args.kwargs["extra_body"] == {"enable_thinking": True}

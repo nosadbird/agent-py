@@ -1,6 +1,7 @@
 """应用配置加载与校验。"""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -25,6 +26,8 @@ class Settings(BaseSettings):
     short_term_max_turns: int = 20
     shell_timeout_seconds: int = 30
     shell_max_output_chars: int = 12_000
+    agent_shell: Literal["auto", "powershell", "bash", "sh"] = "auto"
+    agent_bash_path: str | None = None
 
     @field_validator("dashscope_api_key")
     @classmethod

@@ -1,3 +1,4 @@
+import asyncio
 import subprocess
 from pathlib import Path
 
@@ -8,12 +9,27 @@ from agent_assistant.tools.agent_executor_shell import (
     ExecutorShellRunner,
     classify_shell_command,
     console_approve,
+    resolve_shell_backend,
 )
 
 
 def test_read_only_command_is_safe() -> None:
     risk = classify_shell_command("python --version")
     assert risk.is_risky is False
+    assert classify_shell_command("python -m pytest -q").is_risky is True
+
+
+def test_bash_backend_uses_no_startup_files(tmp_path: Path) -> None:
+    bash = tmp_path / "bash.exe"
+    bash.write_text("", encoding="utf-8")
+    backend = resolve_shell_backend("bash", str(bash))
+    assert backend.command("pwd") == [
+        str(bash),
+        "--noprofile",
+        "--norc",
+        "-c",
+        "pwd",
+    ]
 
 
 def test_remove_command_requires_approval(tmp_path: Path) -> None:
@@ -91,3 +107,38 @@ def test_windows_uses_noninteractive_powershell(
         "-Command",
         "Get-Location",
     ]
+
+
+@pytest.mark.asyncio
+async def test_async_shell_streams_output(tmp_path: Path) -> None:
+    events: list[str] = []
+    runner = ExecutorShellRunner(
+        tmp_path,
+        5,
+        1000,
+        approve=lambda _c, _r: True,
+        shell_name="powershell",
+        on_event=lambda event: events.append(event.text),
+    )
+
+    result = await runner.arun("Write-Output hello")
+
+    assert "退出码：0" in result
+    assert any("hello" in event for event in events)
+
+
+@pytest.mark.asyncio
+async def test_async_shell_truncates_long_line(tmp_path: Path) -> None:
+    runner = ExecutorShellRunner(
+        tmp_path,
+        5,
+        100,
+        approve=lambda _c, _r: True,
+        shell_name="powershell",
+    )
+
+    result = await runner.arun("[Console]::Write('x' * 70000)")
+
+    assert "退出码：0" in result
+    assert "已截断" in result
+    assert len(result) < 1000
